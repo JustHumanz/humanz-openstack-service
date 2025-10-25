@@ -9,12 +9,6 @@ terraform {
   backend "s3" {
     bucket         = "terraform-state-bucket"
     key            = "tf"
-    endpoints = {
-      s3 = var.s3_endpoint
-
-    }
-    access_key     = var.s3_access_key
-    secret_key     = var.s3_secret_key
     region         = "en-us"
     skip_credentials_validation = true
     skip_metadata_api_check     = true
@@ -35,4 +29,5 @@ resource "openstack_containerinfra_cluster_v1" "k8s_cluster" {
   keypair             = var.keypair_name
   master_count        = var.master_count
   node_count          = var.node_count
+  flavor              = var.node_flavor
 }
