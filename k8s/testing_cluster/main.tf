@@ -10,12 +10,11 @@ terraform {
     bucket         = "terraform-state-bucket"
     key            = "tf"
     endpoints = {
-      s3 = var.s3_endpoint
-
+      s3 = ""
     }
-    access_key     = var.s3_access_key
-    secret_key     = var.s3_secret_key
-    region         = "en-us"
+    access_key     = ""
+    secret_key     = ""
+    region         = ""
     skip_credentials_validation = true
     skip_metadata_api_check     = true
     skip_region_validation      = true
