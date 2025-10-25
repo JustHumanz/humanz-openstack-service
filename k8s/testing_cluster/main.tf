@@ -26,7 +26,7 @@ terraform {
 }
 
 provider "openstack" {
-  cloud       = "humanz-cloud"
+  cloud       = var.os_cloud
 }
 
 resource "openstack_containerinfra_cluster_v1" "k8s_cluster" {

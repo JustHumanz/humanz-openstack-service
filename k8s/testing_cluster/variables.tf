@@ -16,6 +16,12 @@ variable "s3_secret_key" {
   default     = ""
 }
 
+variable "os_cloud" {
+  description = "Name of the OpenStack cloud configuration to use"
+  type        = string
+  default     = "openstack"
+}
+
 variable "cluster_name" {
   description = "Name of the Kubernetes cluster"
   type        = string

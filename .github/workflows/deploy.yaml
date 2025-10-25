@@ -1,0 +1,112 @@
+# This is a basic workflow to help you get started with Actions
+
+name: OpenStack Helm workflows
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+#  pull_request:
+#    paths-ignore:
+#      - '.github/**'
+#    branches: [ "master" ]
+#    types: [opened, reopened]
+    
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch: True
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  testing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: little-core-labs/install-terraform@v2.0.0
+        with:
+            version: 0.13.4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22' # Specify your desired Go version
+
+      # Install wireguard
+      - name: Install wireguard
+        shell: bash
+        run: |
+          sudo apt update && sudo apt install wireguard curl jq git -y
+
+      # Get vpn config
+      - name: Decrypt wg.conf with GPG
+        run: |
+          gpg --quiet --batch --yes --decrypt --passphrase="${{ secrets.GPG_PASSPHRASE }}" --output vpn/wg.conf vpn/wg.conf.enc
+
+      # start vpn config
+      - name: Start wg
+        run: |
+          sudo wg-quick up vpn/wg.conf
+
+      # Check VPN connection
+      - name: Check keystone endpoint
+        shell: bash
+        run: |
+          curl http://keystone.ctl1-humanz.cloud 
+
+      # Install Helm
+      - name: Install helm 
+        shell: bash
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | sudo bash
+
+      # Drop kubeconfig
+      - name: Create kubeconfig
+        run: |
+          mkdir -p ${HOME}/.kube
+          echo ${{ secrets.KUBE_CONFIG }} | base64 --decode > ${HOME}/.kube/config
+
+      # Get openstackrc config
+      - name: Get Keystone RC from helm
+        run: |
+          export OS_PASSWORD=$(helm -n openstack get values keystone -o json | jq -r ".endpoints.identity.auth.admin.password")
+          export OS_AUTH=$(helm -n openstack get values keystone -o json | jq -r ".endpoints.identity.scheme.public")://$(helm -n openstack get values keystone -o json | jq -r ".endpoints.identity.host_fqdn_override.public.host")/v3
+          export OS_REGION=$(helm -n openstack get values keystone -o json | jq -r ".endpoints.identity.auth.admin.region_name")
+
+      # Create openstackrc file
+      - name: Create openstackrc file
+        run: |
+          mkdir -p ~/.config/openstack/
+          cat <<EOF > "~/.config/openstack/clouds.yaml"
+          clouds:
+            openstack:
+              auth:
+                auth_url: ${OS_AUTH}
+                username: "admin"
+                password: ${OS_PASSWORD}
+                project_name: "admin"
+                user_domain_name: "Default"
+              region_name: "${OS_REGION}"
+              interface: "publicURL"
+              identity_api_version: 3
+          EOF
+
+      # Build costume terraform provider
+      - name: Build terraform provider
+        run: |
+          git clone -b magnum-capi https://github.com/JustHumanz/terraform-provider-openstack.git /tmp/terraform-provider-openstack
+          go build -C /tmp/terraform-provider-openstack/
+          cat <<EOF > "/tmp/terraform.rc"
+          provider_installation {
+            dev_overrides {
+              "registry.terraform.io/terraform-provider-openstack/openstack" = "/tmp/terraform-provider-openstack/"
+            }
+            direct {}
+          }
+          EOF
+          export TF_CLI_CONFIG_FILE=/tmp/terraform.rc
+
+      # Terraform Init
+      - name: Terraform Init
+        run: |
+          cd k8s/testing_cluster
+          terraform init -var="s3_endpoint=${{ vars.S3_ENDPOINT }}" -var="s3_access_key=${{ secrets.S3_ACCESS_KEY }}" -var="s3_secret_key=${{ secrets.S3_SECRET_KEY }}" -var="os_cloud=openstack"
