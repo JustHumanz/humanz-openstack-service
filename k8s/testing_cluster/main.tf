@@ -29,4 +29,5 @@ resource "openstack_containerinfra_cluster_v1" "k8s_cluster" {
   keypair             = var.keypair_name
   master_count        = var.master_count
   node_count          = var.node_count
+  flavor              = var.node_flavor
 }

@@ -33,3 +33,9 @@ variable "node_count" {
   type        = number
   default     = 3
 }
+
+variable "node_flavor" {
+  description = "flavor of worker nodes"
+  type        = string
+  default     = "m1.medium"
+}
