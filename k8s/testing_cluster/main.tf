@@ -9,12 +9,7 @@ terraform {
   backend "s3" {
     bucket         = "terraform-state-bucket"
     key            = "tf"
-    endpoints = {
-      s3 = ""
-    }
-    access_key     = ""
-    secret_key     = ""
-    region         = ""
+    region         = "en-us"
     skip_credentials_validation = true
     skip_metadata_api_check     = true
     skip_region_validation      = true

@@ -109,19 +109,15 @@ jobs:
           EOF
           export TF_CLI_CONFIG_FILE=/tmp/terraform.rc
 
-      # Build terraform backend state.config
-      - name: Build state.config
+      # Export terraform backend
+      - name: Export S3 env variable
         run: |
-          cat <<EOF > "/tmp/state.config"
-          # state.config
-          endpoints.s3  = ${{ vars.S3_ENDPOINT }}
-          access_key    = ${{ secrets.S3_ACCESS_KEY }}
-          secret_key    = ${{ secrets.S3_SECRET_KEY }}
-          region        = en-us
-          EOF
+          export AWS_ACCESS_KEY_ID="${{ secrets.S3_ACCESS_KEY }}"
+          export AWS_SECRET_ACCESS_KEY="${{ secrets.S3_SECRET_KEY }}"
+          export AWS_ENDPOINT_URL_S3="${{ vars.S3_ENDPOINT }}"
 
       # Terraform Init
       - name: Terraform Init
         run: |
           cd k8s/testing_cluster
-          terraform init -backend-config="/tmp/state.config" -var="os_cloud=openstack"
+          terraform init -var="os_cloud=openstack"
