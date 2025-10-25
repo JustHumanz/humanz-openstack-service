@@ -5,19 +5,16 @@ name: OpenStack Helm workflows
 # Controls when the workflow will run
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
-#  pull_request:
-#    paths-ignore:
-#      - '.github/**'
-#    branches: [ "master" ]
-#    types: [opened, reopened]
+  pull_request:
+    paths-ignore:
+      - '.github/**'
+    branches: [ "master" ]
+    types: [opened, reopened]
     
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch: 
     branches:
       - dev
-    inputs:
-      parameter:
-        description: Testing
 
 env:
   TF_CLI_CONFIG_FILE: /tmp/terraform.rc
@@ -115,8 +112,17 @@ jobs:
           EOF
 
       # Deploy k8s with terraform
-      - name: Deploy k8s testing cluster with terraform
+      - name: Deploy k8s cluster with terraform
+        if: contains(github.event.pull_request.labels.*.name, 'k8s')
         run: |
           cd k8s
+          chmod +x deploy.sh
+          ./deploy.sh
+
+      # Deploy vms with terraform
+      - name: Deploy vms with terraform
+        if: contains(github.event.pull_request.labels.*.name, 'vm')
+        run: |
+          cd vms
           chmod +x deploy.sh
           ./deploy.sh

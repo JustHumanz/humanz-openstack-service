@@ -1,7 +1,7 @@
 curr_dir=$pwd
 for dir in $(ls -d */); do
   cd $dir
-  echo "⏳Deploying k8s '$dir' with terraform."  
+  echo "⏳Deploying vm '$dir' with terraform."  
   terraform init
   terraform plan
   terraform apply -auto-approve
