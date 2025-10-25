@@ -112,8 +112,9 @@ jobs:
           }
           EOF
 
-      # Terraform Init
-      - name: Terraform Init
+      # Deploy k8s with terraform
+      - name: Deploy k8s testing cluster with terraform
         run: |
-          cd k8s/testing_cluster
-          terraform init -var="os_cloud=openstack"
+          cd k8s
+          chmod +x deploy.sh
+          ./deploy.sh
