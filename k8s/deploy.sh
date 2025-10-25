@@ -1,5 +1,5 @@
 curr_dir=$pwd
-for dir in $(ls); do
+for dir in $(ls -d */); do
   cd $dir
   echo "⏳ Deploying '$dir' with terraform."  
   terraform init
