@@ -49,7 +49,8 @@ resource "openstack_compute_instance_v2" "vm" {
     packages:
       - nginx
     runcmd:
+      - echo "<h1>Hello from $(hostname) — deployed by Heat!</h1>" > /var/www/html/index.html
       - systemctl enable nginx
-      - systemctl start nginx
+      - systemctl restart nginx
   EOF
 }
