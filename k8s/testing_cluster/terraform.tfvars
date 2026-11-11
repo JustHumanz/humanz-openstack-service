@@ -1,6 +1,8 @@
-cluster_name         = "k8s-testing"
-cluster_template_id  = "be680d72-3731-4577-9552-2c1af60680a7"
-keypair_name         = "ctl1"
-master_count         = 1
-node_count           = 1
-node_flavor          = "m1.small"
+cluster_name        = "k8s-testing"
+cluster_template_id = "kube-v1.34.11"
+keypair_name        = "humanz-key"
+master_count        = "1"
+node_count          = "2"
+nodegroup_name      = "worker-pool"
+master_node_flavor  = "m1.master"
+worker_node_flavor  = "m1.worker"

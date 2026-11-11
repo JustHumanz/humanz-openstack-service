@@ -34,8 +34,20 @@ variable "node_count" {
   default     = 3
 }
 
-variable "node_flavor" {
-  description = "flavor of worker nodes"
+variable "nodegroup_name" {
+  description = "Name of the worker nodegroup"
+  type        = string
+  default     = "worker-pool"
+}
+
+variable "master_node_flavor" {
+  description = "Flavor of master nodes"
+  type        = string
+  default     = "m1.medium"
+}
+
+variable "worker_node_flavor" {
+  description = "Flavor ID of worker nodes for the Magnum nodegroup"
   type        = string
   default     = "m1.medium"
 }

@@ -9,11 +9,11 @@ output "cluster_name" {
 }
 
 output "cluster_stack_id" {
-  description = "Stack id of Kubernetes cluster"
+  description = "Stack id of the Kubernetes cluster"
   value       = openstack_containerinfra_cluster_v1.k8s_cluster.stack_id
 }
 
 output "kube_api" {
-  description = "Addresses of the master nodes"
+  description = "API address of the cluster"
   value       = openstack_containerinfra_cluster_v1.k8s_cluster.api_address
 }

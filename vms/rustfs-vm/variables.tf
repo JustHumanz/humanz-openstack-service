@@ -7,7 +7,7 @@ variable "os_cloud" {
 variable "instance_name" {
   description = "Name of the VM instance"
   type        = string
-  default     = "ubuntu-nginx-vm"
+  default     = "ubuntu-vm"
 }
 
 variable "image_name" {
@@ -37,5 +37,18 @@ variable "network_name" {
 variable "security_groups" {
   description = "List of security groups to attach to the VM"
   type        = list(string)
-  default     = ["default"]
+  default     = []
+}
+
+variable "fixed_ip_v4" {
+  description = "Static IPv4 to assign to the VM on the OpenStack network port"
+  type        = string
+  default     = null
+}
+
+variable "rustfs_secret_key" {
+  description = "RustFS secret key passed in via TF_VAR_rustfs_secret_key"
+  type        = string
+  sensitive   = true
+  default     = ""
 }
