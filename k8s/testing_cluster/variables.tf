@@ -34,12 +34,6 @@ variable "node_count" {
   default     = 3
 }
 
-variable "nodegroup_name" {
-  description = "Name of the worker nodegroup"
-  type        = string
-  default     = "worker-pool"
-}
-
 variable "master_node_flavor" {
   description = "Flavor of master nodes"
   type        = string

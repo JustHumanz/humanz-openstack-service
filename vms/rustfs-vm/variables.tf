@@ -34,12 +34,6 @@ variable "network_name" {
   default     = "public"
 }
 
-variable "security_groups" {
-  description = "List of security groups to attach to the VM"
-  type        = list(string)
-  default     = []
-}
-
 variable "fixed_ip_v4" {
   description = "Static IPv4 to assign to the VM on the OpenStack network port"
   type        = string
