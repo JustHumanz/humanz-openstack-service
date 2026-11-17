@@ -102,7 +102,7 @@ jobs:
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@v2
         with:
-          tofu_version: 1.9.0 
+          tofu_version: 1.10.0
 
       - name: Install WireGuard
         run: sudo apt-get update && sudo apt-get install -y wireguard resolvconf curl jq
