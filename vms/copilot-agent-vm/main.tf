@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.9.0"
+  required_version = ">= 1.10.0"
   required_providers {
     openstack = {
       source  = "terraform-provider-openstack/openstack"
@@ -16,6 +16,7 @@ terraform {
       s3 = "https://swift.ctl1-humanz.cloud"
     }
 
+    insecure                    = true
     use_path_style = true
 
     skip_credentials_validation = true
