@@ -16,6 +16,7 @@ terraform {
       s3 = "https://swift.ctl1-humanz.cloud"
     }
 
+    insecure                    = true
     use_path_style = true
 
     skip_credentials_validation = true
