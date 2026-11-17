@@ -4,57 +4,109 @@ name: OpenStack Service Deployment
 
 # Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  pull_request:
-    paths-ignore:
-      - '.github/**'
-    branches: [ "master" ]
-    types: [opened, reopened]
-    
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch: 
-    branches:
-      - dev
-
-env:
-  TF_CLI_CONFIG_FILE: /tmp/terraform.rc
-  AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
-  AWS_ENDPOINT_URL_S3: ${{ vars.S3_ENDPOINT }}
-  OS_CLIENT_CONFIG_FILE: /tmp/clouds.yaml
+  push:
+    branches: [master]
+    paths:
+      - '!.github/**'
+      - 'k8s/**/*.tf*'
+      - 'vms/**/*.tf*'
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  deploy:
+  prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    # For comments: PRs only, ".redeploy" prefix, trusted authors only
+    if: >
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '.redeploy') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+                github.event.comment.author_association))
+    outputs:
+      services: ${{ steps.svc.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve services to deploy
+        id: svc
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          INPUT_SERVICES: ${{ inputs.services }}
+        run: |
+          set -euo pipefail
+
+          case "$EVENT" in
+            push)
+              services=$(git diff --name-only "$BEFORE" "$GITHUB_SHA" )
+              ;;
+            issue_comment)
+              state=$(gh pr view "$PR_NUMBER" --json state -q .state)
+              if [ "$state" != "MERGED" ]; then
+                echo "::error::PR #$PR_NUMBER is not merged, nothing to redeploy"
+                exit 1
+              fi
+              # ".redeploy nova neutron" -> explicit list; plain ".redeploy" -> PR's changed services
+              explicit=$(head -n1 <<<"$COMMENT_BODY" | tr -d '\r' | sed -E 's/^\.redeploy[[:space:]]*//')
+              if [ -n "$explicit" ]; then
+                services=$(tr -s ' ,' '\n' <<<"$explicit")
+              else
+                services=$(gh pr diff "$PR_NUMBER" --name-only )
+              fi
+              ;;
+            workflow_dispatch)
+              services=$(tr -s ' ,' '\n' <<<"$INPUT_SERVICES")
+              ;;
+          esac
+
+          services=$(grep -v '^$' <<<"$services" | sort -u || true)
+
+          if grep -qvE '^[a-z0-9-]+$' <<<"$services"; then
+            echo "::error::Invalid service name in: $services"
+            exit 1
+          fi
+
+          json=$(jq -R -s -c 'split("\n") | map(select(length>0))' <<<"$services")
+          echo "services=$json" >> "$GITHUB_OUTPUT"
+          echo "Services to deploy: $json" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: prepare
+    if: needs.prepare.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    environment: Prod
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        service: ${{ fromJSON(needs.prepare.outputs.services) }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Terraform
-        uses: little-core-labs/install-terraform@v2.0.0
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v2
         with:
-            version: 1.13.4
+          tofu_version: 1.9.0 
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.22' # Specify your desired Go version
+      - name: Install WireGuard
+        run: sudo apt-get update && sudo apt-get install -y wireguard resolvconf curl jq
 
-      # Install wireguard
-      - name: Install wireguard
-        shell: bash
+      - name: Connect VPN
+        env:
+          WG_CONFIG: ${{ secrets.WG_CONFIG }}
         run: |
-          sudo apt update && sudo apt install wireguard curl jq git -y
-
-      # Get vpn config
-      - name: Decrypt wg.conf with GPG
-        run: |
-          gpg --quiet --batch --yes --decrypt --passphrase="${{ secrets.GPG_PASSPHRASE }}" --output vpn/wg.conf vpn/wg.conf.enc
-
-      # start vpn config
-      - name: Start wg
-        run: |
-          sudo wg-quick up vpn/wg.conf
+          printf '%s\n' "$WG_CONFIG" | sudo tee /etc/wireguard/wg0.conf > /dev/null
+          sudo chmod 600 /etc/wireguard/wg0.conf
+          sudo wg-quick up wg0
 
       # Check VPN connection
       - name: Check keystone endpoint
@@ -81,7 +133,7 @@ jobs:
           export OS_AUTH=$(helm -n openstack get values keystone -o json | jq -r ".endpoints.identity.scheme.public")://$(helm -n openstack get values keystone -o json | jq -r ".endpoints.identity.host_fqdn_override.public.host")/v3
           export OS_REGION=$(helm -n openstack get values keystone -o json | jq -r ".endpoints.identity.auth.admin.region_name")
           
-          cat <<EOF > "/tmp/clouds.yaml"
+          cat <<EOF > "${HOME}/.config/openstack/clouds.yaml"
           clouds:
             openstack:
               auth:
@@ -97,32 +149,21 @@ jobs:
               verify: False
           EOF
 
-      # Build costume terraform provider
-      - name: Build terraform provider
+      - name: Deploy ${{ matrix.service }}
+        env:
+          SERVICE: ${{ matrix.service }}
+          TF_VAR_rustfs_secret_key: ${{ secrets.RUSTFS_SECRET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          git clone -b magnum-capi https://github.com/JustHumanz/terraform-provider-openstack.git /tmp/terraform-provider-openstack
-          go build -C /tmp/terraform-provider-openstack/
-          cat <<EOF > "/tmp/terraform.rc"
-          provider_installation {
-            dev_overrides {
-              "registry.terraform.io/terraform-provider-openstack/openstack" = "/tmp/terraform-provider-openstack/"
-            }
-            direct {}
-          }
-          EOF
-
-      # Deploy k8s with terraform
-      - name: Deploy k8s cluster with terraform
-        if: contains(github.event.pull_request.labels.*.name, 'k8s')
-        run: |
-          cd k8s
+          cd "$SERVICE"
           chmod +x deploy.sh
           ./deploy.sh
 
-      # Deploy vms with terraform
-      - name: Deploy vms with terraform
-        if: contains(github.event.pull_request.labels.*.name, 'vm')
+      - name: Cleanup
+        if: always()
         run: |
-          cd vms
-          chmod +x deploy.sh
-          ./deploy.sh
+          sudo wg-quick down wg0 || true
+          sudo rm -f /etc/wireguard/wg0.conf
+          rm -f "$HOME/.kube/config"
+          rm -f /tmp/clouds.yaml
